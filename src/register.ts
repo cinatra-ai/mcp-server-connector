@@ -51,17 +51,46 @@ function hostService<T>(ctx: ExtensionHostContext, capability: string): T {
   return provider.impl as T;
 }
 
-/** Build the host-bound deps from the per-concern host service. Every member
- *  resolves LAZILY at call time — constructing this object does no I/O and no
- *  resolution (probe-safe). */
+/** Build the host-bound deps from the per-concern host service. The read +
+ *  guard members resolve the host service LAZILY at call time — so for those,
+ *  constructing this object does no I/O and no resolution (probe-safe).
+ *
+ *  The two WRITE members are the host's REAL server actions, bound DIRECTLY
+ *  (not wrapped): the setup page passes them straight to `<form action={…}>`,
+ *  which requires a genuine, serializable server-action reference — an adapter
+ *  arrow closure (`(fd) => registry().createServerAction(fd)`) is a fresh
+ *  client-side function, NOT a server action, and React rejects it at form
+ *  render. So we resolve the host service ONCE here and forward its actual
+ *  `createServerAction` / `deleteServerAction` references. `register(ctx)` runs
+ *  at ACTIVATION (the host boot wiring has already published the service), so
+ *  this resolution is safe; if the service is somehow absent, `hostService`
+ *  fails loud (the same error the lazy members would surface). */
 function buildHostBoundDeps(ctx: ExtensionHostContext): McpServerConnectorHostDeps {
   const registry = () =>
     hostService<HostExternalMcpRegistryShape>(ctx, "@cinatra-ai/host:external-mcp-registry");
+
+  // Resolve the host service eagerly ONLY to forward its REAL server-action
+  // references (the write members). Resolution is OPTIONAL here so building
+  // deps stays probe-safe when the service is not yet published: a present
+  // provider yields the genuine references; an absent one falls back to a lazy
+  // wrapper that fails loud at call time via `registry()` (identical posture to
+  // the read members). `register(ctx)` runs at ACTIVATION, after the host boot
+  // wiring publishes the service, so production always takes the direct-ref
+  // branch — and `<form action>` therefore receives a genuine server action.
+  const resolvedNow = ctx.capabilities.resolveProviders(
+    "@cinatra-ai/host:external-mcp-registry",
+  )[0]?.impl as HostExternalMcpRegistryShape | undefined;
+
   return {
     getServerById: (id) => registry().getServerById(id),
     listServers: () => registry().listServers(),
-    createServerAction: (formData) => registry().createServerAction(formData),
-    deleteServerAction: (formData) => registry().deleteServerAction(formData),
+    // Real server-action references when resolvable (the production path) so
+    // `<form action>` gets a genuine server action; lazy fail-loud wrapper
+    // otherwise (probe-safe; matches the read members' posture).
+    createServerAction:
+      resolvedNow?.createServerAction ?? ((formData) => registry().createServerAction(formData)),
+    deleteServerAction:
+      resolvedNow?.deleteServerAction ?? ((formData) => registry().deleteServerAction(formData)),
     resolveViewerContext: () => registry().resolveViewerContext(),
     isConnectionServiceReady: () => registry().isConnectionServiceReady(),
     isPrivateUrl: (serverUrl) => registry().isPrivateUrl(serverUrl),
