@@ -15,6 +15,11 @@ type RegisteredProvider = { packageName: string; impl: unknown };
 
 function makeCtx(services: Record<string, unknown>) {
   const registered: Record<string, RegisteredProvider[]> = {};
+  // register(ctx) now also registers the schema-config READ/PROBE named actions
+  // via `ctx.ui` (the "ui" host port) — provide a faithful ui port so this
+  // deps-binding test exercises a complete ctx. (Named-action behavior is
+  // asserted in register-ui-actions.test.ts.)
+  const uiActions: Array<{ id: string; handler: (input: unknown) => Promise<unknown> }> = [];
   return {
     ctx: {
       capabilities: {
@@ -26,8 +31,16 @@ function makeCtx(services: Record<string, unknown>) {
           return svc ? [{ packageName: "host", impl: svc }] : [];
         },
       },
+      ui: {
+        registerSetupSurface: () => {},
+        registerSettingsSurface: () => {},
+        registerAction: (action: { id: string; handler: (input: unknown) => Promise<unknown> }) => {
+          uiActions.push(action);
+        },
+      },
     } as unknown as Parameters<typeof register>[0],
     registered,
+    uiActions,
   };
 }
 
