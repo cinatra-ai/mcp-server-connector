@@ -24,6 +24,27 @@ import "server-only";
 //     add-form and per-row delete button submit to. They travel as DATA through
 //     the capability registry; the connector treats them as opaque
 //     FormData->Promise<void> server actions.
+//
+// DECLARATIVE SETUP DSL (cinatra#658 / PR-4 host binding):
+//   This connector now ALSO ships a declarative `cinatra.configSchema`
+//   (uiSurface:"schema-config") so the host renders the setup page from DATA
+//   with NO rebuild. Its `record-list` + `advisory` fields read host-registered
+//   READ/PROBE named actions this connector registers in register(ctx) via
+//   `ctx.ui` (`listServers`, `connectionServiceReady`). Its `named-action`
+//   ("Add server", actionId `createServer`) and `record-list` per-row delete
+//   (actionId `deleteServer`) are WRITE actions whose handlers + per-operation
+//   authorization (admin-only-for-global scope; per-row delete authz) are bound
+//   HOST-side in PR-4 against this JSON contract (NOT registered by the
+//   connector — they must stay host-authorized, never package-evaluated):
+//     createServer  input: { label: string; serverUrl: string; apiKey?: string;
+//                            scope: "global"|"org"|"team"|"user" }
+//                   The host MUST enforce admin-only for non-"user" scope and
+//                   apply the SAME validation as `createServerAction(FormData)`.
+//     deleteServer  input: { id: string }
+//                   The host MUST verify the actor may delete that specific row.
+//   The single host action endpoint `/api/extensions/{installId}/actions/
+//   {actionId}` resolves + authorizes the actor host-side ("use" tier) before
+//   any handler runs; the connector handlers never evaluate the actor.
 //   - viewerContext: the resolved viewer (isAdmin + userId) so the UI scopes
 //     visibility (admins see every row; a non-admin sees only their own
 //     user-scoped rows) and offers only the scopes the viewer may create.
