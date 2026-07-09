@@ -6,9 +6,9 @@
 // `register(ctx)` is deps-binding-only: it adapts the per-concern host service
 // published in the capability registry
 // (`@cinatra-ai/host:external-mcp-registry`) into the connector's deps slot
-// (`./deps`). The carved setup-page (`./setup-page` -> `./mcp-server-setup-impl`)
-// resolves the bound deps via `getMcpServerDeps()`; the connector NEVER imports a
-// host-internal `@/…` module.
+// (`./deps`), resolvable via `getMcpServerDeps()`; the connector NEVER imports a
+// host-internal `@/…` module. This connector's live surface is
+// `uiSurface: "schema-config"` (below) — it ships NO bundled React setup page.
 //
 // Every adapter member resolves its host service LAZILY at call time, so
 // activation order against the host's boot imports never matters.
@@ -54,20 +54,13 @@ function hostService<T>(ctx: ExtensionHostContext, capability: string): T {
 /** Build the host-bound deps from the per-concern host service. EVERY member
  *  resolves the host service LAZILY at call time, so constructing this object
  *  does no I/O and no resolution (probe-safe) and never captures the host's
- *  published instance.
- *
- *  The two WRITE members (createServerAction / deleteServerAction) resolve the
- *  host service LAZILY at call time, exactly like the read members
- *  (cinatra#1097). They are NEVER bound into `<form action={…}>` anymore — the
- *  setup page's forms bind the connector-local `"use server"` actions in
- *  ./actions, which call these members at POST time — so there is no reason to
- *  capture the host's published instance eagerly. The old activation-time
- *  direct-ref capture was in fact the #1097 bug surface: the host re-publishes
- *  the service from other bundle graphs, REPLACING the registry instance, and a
- *  captured stale instance never receives the RSC reflection the host bridge
- *  applies to the registry's CURRENT instance. Lazy resolution always follows
- *  the live registry instead — and this connector no longer depends on that
- *  reflection at all (the forms bind ./actions). */
+ *  published instance — including the create/delete write members, which no
+ *  longer have any bundled-react `<form action={…}>` consumer to serve
+ *  (that dormant fallback + its connector-local `"use server"` actions were
+ *  deleted — cinatra-ai/mcp-server-connector#13). Lazy resolution here still
+ *  matters: it keeps this deps object safe to construct at any point in the
+ *  host's boot sequence regardless of which bundle graph last (re-)published
+ *  the service. */
 function buildHostBoundDeps(ctx: ExtensionHostContext): McpServerConnectorHostDeps {
   const registry = () =>
     hostService<HostExternalMcpRegistryShape>(ctx, "@cinatra-ai/host:external-mcp-registry");
@@ -84,11 +77,11 @@ function buildHostBoundDeps(ctx: ExtensionHostContext): McpServerConnectorHostDe
 }
 
 /** A registry row projected to a JSON-safe shape the declarative `record-list`
- *  renderer consumes (cinatra.configSchema). Mirrors the badges the
- *  bundled-react fallback derived inline (scope / private-URL / disabled /
- *  api-key-configured). PURE PROJECTION — no actor evaluation, no visibility
- *  gating: the host action endpoint already authorized the actor ("use") and the
- *  host listServers facet returns only the rows that actor may see. */
+ *  renderer consumes (cinatra.configSchema): scope / private-URL / disabled /
+ *  api-key-configured badges as data. PURE PROJECTION — no actor evaluation, no
+ *  visibility gating: the host action endpoint already authorized the actor
+ *  ("use") and the host listServers facet returns only the rows that actor may
+ *  see. */
 export type McpServerListRow = {
   id: string;
   label: string;
@@ -105,11 +98,7 @@ export type McpServerListRow = {
 export function register(ctx: ExtensionHostContext): void {
   // Bind the host deps slot. Always-bind: re-activation — incl. a hot-update
   // digest swap — re-binds fresh lazy resolvers, so a stale deps object can
-  // never outlive its digest. The bound deps back the bundled-react setup-page
-  // fallback (`./setup-page` -> `./mcp-server-setup-impl`), whose forms bind the
-  // connector-local `"use server"` actions in ./actions (which forward to the
-  // create/delete write members here at POST time — cinatra#1097), plus the
-  // schema-config READ handlers below.
+  // never outlive its digest.
   const deps = buildHostBoundDeps(ctx);
   registerMcpServerConnector(deps);
 

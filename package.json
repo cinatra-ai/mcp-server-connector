@@ -13,8 +13,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./register": "./src/register.ts",
-    "./deps": "./src/deps.ts",
-    "./setup-page": "./src/setup-page.tsx"
+    "./deps": "./src/deps.ts"
   },
   "types": "./src/index.ts",
   "scripts": {
@@ -22,22 +21,14 @@
     "lint": "eslint . --no-inline-config"
   },
   "dependencies": {
-    "clsx": "^2.1.1",
     "server-only": "0.0.1",
-    "tailwind-merge": "^3.5.0",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "@cinatra-ai/sdk-extensions": "*",
-    "@cinatra-ai/sdk-ui": "*"
+    "@cinatra-ai/sdk-extensions": "*"
   },
   "peerDependenciesMeta": {
     "@cinatra-ai/sdk-extensions": {
-      "optional": true
-    },
-    "@cinatra-ai/sdk-ui": {
       "optional": true
     }
   },
