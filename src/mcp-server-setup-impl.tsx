@@ -41,6 +41,12 @@ import {
   getMcpServerDeps,
   type ExternalMcpServerRecordShape,
 } from "./deps";
+// Connector-local "use server" actions (cinatra#1097): the forms bind these
+// compiler-minted references — never the deps-slot instances, which carry no
+// server-reference metadata of their own and 500 the page if a host
+// re-publication strands the captured instance (see ./actions for the full
+// story). Each action forwards to the deps slot at POST time.
+import { createServerAction, deleteServerAction } from "./actions";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -149,7 +155,7 @@ export async function McpServerConnectorSetupImpl(props?: {
                             </p>
                           ) : null}
                         </div>
-                        <form action={deps.deleteServerAction}>
+                        <form action={deleteServerAction}>
                           <HiddenInput name="id" value={row.id} />
                           <Button type="submit" variant="destructive" size="sm">
                             Delete
@@ -166,7 +172,7 @@ export async function McpServerConnectorSetupImpl(props?: {
               <h3 className="text-lg font-semibold text-foreground">
                 Add a new server
               </h3>
-              <form action={deps.createServerAction} className="grid gap-4">
+              <form action={createServerAction} className="grid gap-4">
                 <FieldGroup>
                   <Field>
                     <FieldLabel htmlFor="label">Label</FieldLabel>

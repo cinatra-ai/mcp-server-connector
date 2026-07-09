@@ -51,46 +51,32 @@ function hostService<T>(ctx: ExtensionHostContext, capability: string): T {
   return provider.impl as T;
 }
 
-/** Build the host-bound deps from the per-concern host service. The read +
- *  guard members resolve the host service LAZILY at call time — so for those,
- *  constructing this object does no I/O and no resolution (probe-safe).
+/** Build the host-bound deps from the per-concern host service. EVERY member
+ *  resolves the host service LAZILY at call time, so constructing this object
+ *  does no I/O and no resolution (probe-safe) and never captures the host's
+ *  published instance.
  *
- *  The two WRITE members are the host's REAL server actions, bound DIRECTLY
- *  (not wrapped): the setup page passes them straight to `<form action={…}>`,
- *  which requires a genuine, serializable server-action reference — an adapter
- *  arrow closure (`(fd) => registry().createServerAction(fd)`) is a fresh
- *  client-side function, NOT a server action, and React rejects it at form
- *  render. So we resolve the host service ONCE here and forward its actual
- *  `createServerAction` / `deleteServerAction` references. `register(ctx)` runs
- *  at ACTIVATION (the host boot wiring has already published the service), so
- *  this resolution is safe; if the service is somehow absent, `hostService`
- *  fails loud (the same error the lazy members would surface). */
+ *  The two WRITE members (createServerAction / deleteServerAction) resolve the
+ *  host service LAZILY at call time, exactly like the read members
+ *  (cinatra#1097). They are NEVER bound into `<form action={…}>` anymore — the
+ *  setup page's forms bind the connector-local `"use server"` actions in
+ *  ./actions, which call these members at POST time — so there is no reason to
+ *  capture the host's published instance eagerly. The old activation-time
+ *  direct-ref capture was in fact the #1097 bug surface: the host re-publishes
+ *  the service from other bundle graphs, REPLACING the registry instance, and a
+ *  captured stale instance never receives the RSC reflection the host bridge
+ *  applies to the registry's CURRENT instance. Lazy resolution always follows
+ *  the live registry instead — and this connector no longer depends on that
+ *  reflection at all (the forms bind ./actions). */
 function buildHostBoundDeps(ctx: ExtensionHostContext): McpServerConnectorHostDeps {
   const registry = () =>
     hostService<HostExternalMcpRegistryShape>(ctx, "@cinatra-ai/host:external-mcp-registry");
 
-  // Resolve the host service eagerly ONLY to forward its REAL server-action
-  // references (the write members). Resolution is OPTIONAL here so building
-  // deps stays probe-safe when the service is not yet published: a present
-  // provider yields the genuine references; an absent one falls back to a lazy
-  // wrapper that fails loud at call time via `registry()` (identical posture to
-  // the read members). `register(ctx)` runs at ACTIVATION, after the host boot
-  // wiring publishes the service, so production always takes the direct-ref
-  // branch — and `<form action>` therefore receives a genuine server action.
-  const resolvedNow = ctx.capabilities.resolveProviders(
-    "@cinatra-ai/host:external-mcp-registry",
-  )[0]?.impl as HostExternalMcpRegistryShape | undefined;
-
   return {
     getServerById: (id) => registry().getServerById(id),
     listServers: () => registry().listServers(),
-    // Real server-action references when resolvable (the production path) so
-    // `<form action>` gets a genuine server action; lazy fail-loud wrapper
-    // otherwise (probe-safe; matches the read members' posture).
-    createServerAction:
-      resolvedNow?.createServerAction ?? ((formData) => registry().createServerAction(formData)),
-    deleteServerAction:
-      resolvedNow?.deleteServerAction ?? ((formData) => registry().deleteServerAction(formData)),
+    createServerAction: (formData) => registry().createServerAction(formData),
+    deleteServerAction: (formData) => registry().deleteServerAction(formData),
     resolveViewerContext: () => registry().resolveViewerContext(),
     isConnectionServiceReady: () => registry().isConnectionServiceReady(),
     isPrivateUrl: (serverUrl) => registry().isPrivateUrl(serverUrl),
@@ -119,8 +105,11 @@ export type McpServerListRow = {
 export function register(ctx: ExtensionHostContext): void {
   // Bind the host deps slot. Always-bind: re-activation — incl. a hot-update
   // digest swap — re-binds fresh lazy resolvers, so a stale deps object can
-  // never outlive its digest. The bound deps still back the bundled-react
-  // setup-page fallback (`./setup-page` -> `./mcp-server-setup-impl`).
+  // never outlive its digest. The bound deps back the bundled-react setup-page
+  // fallback (`./setup-page` -> `./mcp-server-setup-impl`), whose forms bind the
+  // connector-local `"use server"` actions in ./actions (which forward to the
+  // create/delete write members here at POST time — cinatra#1097), plus the
+  // schema-config READ handlers below.
   const deps = buildHostBoundDeps(ctx);
   registerMcpServerConnector(deps);
 
