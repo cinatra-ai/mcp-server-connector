@@ -20,10 +20,12 @@ import "server-only";
 // What this connector needs from the host:
 //   - getServerById / listServers: the external-MCP registry READ surface (the
 //     UI lists registered servers).
-//   - createServerAction / deleteServerAction: the host server actions the
-//     add-form and per-row delete button submit to. They travel as DATA through
-//     the capability registry; the connector treats them as opaque
-//     FormData->Promise<void> server actions.
+//   - createServerAction / deleteServerAction: the host create/delete
+//     implementations the connector-local `"use server"` actions (./actions)
+//     forward to at POST time (cinatra#1097 — the bundled-react fallback's
+//     add-form + per-row delete bind those connector-local actions, never these
+//     members directly). They travel as DATA through the capability registry;
+//     the connector treats them as opaque FormData->Promise<void> functions.
 //
 // DECLARATIVE SETUP DSL (cinatra#658 / PR-4 host binding):
 //   This connector now ALSO ships a declarative `cinatra.configSchema`
@@ -90,7 +92,9 @@ export type ExternalMcpViewerContext = {
   userId: string;
 };
 
-/** A host server action the setup-page <form> submits to. Opaque to the
+/** A host create/delete implementation the connector-local `"use server"`
+ *  actions (./actions) forward to at POST time (cinatra#1097 — the forms bind
+ *  the connector-local actions, never these members directly). Opaque to the
  *  connector — the host owns the authorization boundary + the redirect. */
 export type ExternalMcpServerAction = (formData: FormData) => Promise<void>;
 
@@ -99,9 +103,11 @@ export interface McpServerConnectorHostDeps {
   getServerById: (id: string) => ExternalMcpServerRecordShape | null;
   /** Every registry row (cached host-side, createdAt ASC). */
   listServers: () => ExternalMcpServerRecordShape[];
-  /** The host server action the add-form submits to (create/upsert). */
+  /** Host create/upsert impl the connector-local createServerAction (./actions)
+   *  forwards to at POST time (the add-form binds the local action, not this). */
   createServerAction: ExternalMcpServerAction;
-  /** The host server action the per-row delete button submits to. */
+  /** Host delete impl the connector-local deleteServerAction (./actions)
+   *  forwards to at POST time (the delete button binds the local action). */
   deleteServerAction: ExternalMcpServerAction;
   /** Resolve the current viewer (admin + user id) for visibility scoping. */
   resolveViewerContext: () => Promise<ExternalMcpViewerContext>;
