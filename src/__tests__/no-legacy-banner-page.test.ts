@@ -15,19 +15,25 @@
 // export or the UI dependencies (react/react-dom/@cinatra-ai/sdk-ui) that only
 // the deleted bundled page needed.
 import { describe, expect, it } from "vitest";
+// node:fs/node:url — this repo ships no @types/node (it is a source-mirror
+// repo whose standalone typecheck is intentionally skipped in CI; see
+// .github/workflows/ci.yml's first-party-peer skip branch, the same posture
+// that already lets register.ts's @cinatra-ai/sdk-extensions type import go
+// unresolved standalone). A dynamic-import-rejects probe is NOT equivalent to
+// an existence check — a restored file with an unrelated top-level error would
+// also reject and pass a reject-based assertion — so this test uses the real
+// filesystem check instead.
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import pkg from "../../package.json" with { type: "json" };
 
+const srcDir = fileURLToPath(new URL("..", import.meta.url));
+
 describe("legacy bundled setup-page banners are deleted (mcp-server-connector#13)", () => {
-  it("the bundled setup-page implementation files no longer exist", async () => {
-    // Specifiers held in a `string`-typed variable (not a literal) so neither
-    // TypeScript nor Vite statically resolves a module path we EXPECT to be
-    // absent — only a runtime dynamic import probes for it.
-    const implSpecifier: string = "../mcp-server-setup-impl.tsx";
-    const pageSpecifier: string = "../setup-page.tsx";
-    const actionsSpecifier: string = "../actions.ts";
-    await expect(import(implSpecifier)).rejects.toBeDefined();
-    await expect(import(pageSpecifier)).rejects.toBeDefined();
-    await expect(import(actionsSpecifier)).rejects.toBeDefined();
+  it("the bundled setup-page implementation files no longer exist", () => {
+    expect(existsSync(`${srcDir}mcp-server-setup-impl.tsx`)).toBe(false);
+    expect(existsSync(`${srcDir}setup-page.tsx`)).toBe(false);
+    expect(existsSync(`${srcDir}actions.ts`)).toBe(false);
   });
 
   it("the package no longer exports a bundled ./setup-page entry point", () => {
