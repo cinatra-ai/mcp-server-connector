@@ -30,8 +30,8 @@ and team members who want a personal MCP server visible only to them.
 - **Register external MCP servers.** Add a server by label and public URL; its
   tools are injected into Cinatra's MCP toolbox.
 - **Scope who sees a server.** Admins register servers globally (every user,
-  every agent), per-organization, or per-team. Regular users register personal
-  servers visible only to themselves.
+  every agent). Regular users register personal servers visible only to
+  themselves.
 - **Manage the registry.** See every server you are allowed to see, with badges
   for its scope, whether its URL is private (and therefore not injected), and
   whether it is disabled. Remove a server with one action.

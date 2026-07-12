@@ -36,14 +36,24 @@ import "server-only";
 //   HOST-side in PR-4 against this JSON contract (NOT registered by the
 //   connector — they must stay host-authorized, never package-evaluated):
 //     createServer  input: { label: string; serverUrl: string; apiKey?: string;
-//                            scope: "global"|"org"|"team"|"user" }
-//                   The host MUST enforce admin-only for non-"user" scope and
-//                   apply the SAME validation as `createServerAction(FormData)`.
+//                            scope: "global"|"user" }
+//                   The host write handler fail-closed-rejects any scope
+//                   outside {global, user} — "org"/"team" are NOT offered by
+//                   this connector's scope select (cinatra-ai/cinatra#1407
+//                   comment 4950796614) even though `ExternalMcpServerScope`
+//                   below still carries them structurally, for pre-existing
+//                   registry rows that predate this restriction. The host
+//                   MUST enforce admin-only for the "global" scope and apply
+//                   the SAME validation as `createServerAction(FormData)`.
 //     deleteServer  input: { id: string }
 //                   The host MUST verify the actor may delete that specific row.
 //   The single host action endpoint `/api/extensions/{installId}/actions/
 //   {actionId}` resolves + authorizes the actor host-side ("use" tier) before
-//   any handler runs; the connector handlers never evaluate the actor.
+//   any handler runs; the createServer/deleteServer WRITE handlers never
+//   evaluate the actor beyond that. The `listServers` READ handler is the one
+//   exception — it calls `resolveViewerContext` itself to filter rows by
+//   VISIBILITY (see register.ts), since the host's raw listServers facet
+//   returns every row unfiltered.
 //   - viewerContext: the resolved viewer (isAdmin + userId) so the UI scopes
 //     visibility (admins see every row; a non-admin sees only their own
 //     user-scoped rows) and offers only the scopes the viewer may create.
@@ -83,7 +93,8 @@ export type ExternalMcpServerRecordShape = {
 
 /** The resolved viewer the UI scopes against. */
 export type ExternalMcpViewerContext = {
-  /** Platform admin — sees every row and may create global/org/team rows. */
+  /** Platform admin — sees every row and may create a global row (non-admins
+   *  may only create/see their own user-scoped rows). */
   isAdmin: boolean;
   /** The viewer's user id (the owner of any user-scoped row they create). */
   userId: string;

@@ -26,8 +26,8 @@ You need:
   IPs, so the URL must be publicly reachable.
 - An optional **API key** if the server requires authentication.
 - Permission in Cinatra to install an integration and configure a connector. To
-  register a global, organization, or team server you must be a platform admin;
-  any authenticated user can register a personal server.
+  register a global server you must be a platform admin; any authenticated user
+  can register a personal server.
 
 ## Step 1 — Install the integration
 
@@ -46,8 +46,8 @@ You need:
 2. Enter the **Server URL** — the public URL of the MCP server.
 3. Optionally paste an **API key**; it is stored securely via the connection
    service.
-4. Choose a **Scope**. Admins can pick global, organization, team, or personal;
-   non-admins can only create a personal server.
+4. Choose a **Scope**. Admins can pick global or personal; non-admins can only
+   create a personal server.
 5. Click **Add server**.
 
 ## Step 4 — Confirm it is registered

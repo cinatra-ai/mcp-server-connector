@@ -3,10 +3,14 @@
 // live registered-server rows + the connection-service readiness WITHOUT
 // shipping React. The host dispatches these by id through
 // `/api/extensions/{installId}/actions/{actionId}`, which resolves + authorizes
-// the actor host-side BEFORE the handler runs — so the handlers here NEVER
-// evaluate the actor (no resolveViewerContext for authz/visibility). The WRITE
-// actions (createServer/deleteServer) are deliberately NOT registered by the
-// connector; they are bound host-side in cinatra#658 (PR-4).
+// the actor host-side BEFORE the handler runs (may this actor call the action
+// at all) — but that is not the same as visibility: the host's raw
+// `listServers` facet returns EVERY row unfiltered, so the `listServers`
+// handler here DOES call `resolveViewerContext`, filtering to the viewer's own
+// rows when they are not an admin (cinatra-ai/cinatra#1407 comment
+// 4950796614). The WRITE actions (createServer/deleteServer) are deliberately
+// NOT registered by the connector; they are bound host-side in cinatra#658
+// (PR-4).
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { register, type McpServerListRow } from "../register";
 import {
@@ -64,10 +68,19 @@ const PRIVATE_DISABLED_ROW: ExternalMcpServerRecordShape = {
   userId: "u1",
   enabled: false,
 };
+/** A different user's personal server — must never be visible to a non-admin
+ *  viewer who is not its owner. */
+const OTHER_USER_ROW: ExternalMcpServerRecordShape = {
+  ...GLOBAL_ROW,
+  id: "srv-other-user",
+  label: "Someone Else's MCP",
+  scope: "user",
+  userId: "u2",
+};
 
 function hostService(over: Record<string, unknown> = {}) {
   return {
-    listServers: vi.fn(() => [GLOBAL_ROW, PRIVATE_DISABLED_ROW]),
+    listServers: vi.fn(() => [GLOBAL_ROW, PRIVATE_DISABLED_ROW, OTHER_USER_ROW]),
     getServerById: vi.fn(() => GLOBAL_ROW),
     resolveViewerContext: vi.fn(async () => ({ isAdmin: true, userId: "u1" })),
     isConnectionServiceReady: vi.fn(() => true),
@@ -95,8 +108,8 @@ describe("mcp-server-connector register(ctx) — schema-config named actions", (
     expect(ids).not.toContain("deleteServer");
   });
 
-  it("listServers projects rows to the JSON-safe record-list shape with derived badges", async () => {
-    const svc = hostService();
+  it("listServers projects rows to the JSON-safe record-list shape with derived badges (admin viewer sees every row)", async () => {
+    const svc = hostService(); // default resolveViewerContext: { isAdmin: true, userId: "u1" }
     const { ctx, uiActions } = makeCtx({
       "@cinatra-ai/host:external-mcp-registry": svc,
     });
@@ -123,10 +136,37 @@ describe("mcp-server-connector register(ctx) — schema-config named actions", (
         disabled: true,
         apiKeyConfigured: false,
       },
+      {
+        id: "srv-other-user",
+        label: "Someone Else's MCP",
+        serverUrl: "https://mcp.example.com/sse",
+        scope: "user",
+        privateUrl: false,
+        disabled: false,
+        apiKeyConfigured: true,
+      },
     ]);
-    // SECURITY: the handler does host-authorized data projection ONLY — it never
-    // evaluates the actor for authorization or visibility gating.
-    expect(svc.resolveViewerContext).not.toHaveBeenCalled();
+    // The handler DOES resolve the viewer — an admin sees every row (VISIBILITY
+    // is a superset of the "use" authorization the host action endpoint already
+    // performed).
+    expect(svc.resolveViewerContext).toHaveBeenCalledOnce();
+  });
+
+  it("listServers filters to only the viewer's own user-scoped rows for a NON-admin viewer (never globals, never another user's rows)", async () => {
+    const svc = hostService({
+      resolveViewerContext: vi.fn(async () => ({ isAdmin: false, userId: "u1" })),
+    });
+    const { ctx, uiActions } = makeCtx({
+      "@cinatra-ai/host:external-mcp-registry": svc,
+    });
+    register(ctx);
+    const list = uiActions.find((a) => a.id === "listServers")!;
+    const out = (await list.handler(undefined)) as { servers: McpServerListRow[] };
+
+    // Only PRIVATE_DISABLED_ROW (scope "user", userId "u1") is visible — the
+    // global row and the other user's ("u2") row are both excluded.
+    expect(out.servers.map((s) => s.id)).toEqual(["srv-private"]);
+    expect(svc.resolveViewerContext).toHaveBeenCalledOnce();
   });
 
   it("connectionServiceReady returns the readiness probe boolean", async () => {

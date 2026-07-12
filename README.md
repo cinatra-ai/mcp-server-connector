@@ -4,7 +4,7 @@ Register external [Model Context Protocol](https://modelcontextprotocol.io) serv
 
 **Setup:** Open the connector setup page. Add a server with a public URL (LLM providers cannot reach localhost or private IPs), an optional API key stored securely via the connection service, and a scope. The registry rows, the create/delete actions, and the encrypted key store stay host-side; the connector binds them through its host capability slot and never reaches host internals directly.
 
-**Visibility:** The connector is `admin` visibility. A non-admin sees and manages only their own user-scoped rows; an admin sees every row and may register global, org, or team servers.
+**Visibility:** The connector is `admin` visibility. A non-admin sees and manages only their own user-scoped rows; an admin sees every row and may register a global server (regular users register personal servers only).
 
 **Development:** `pnpm test` runs the Vitest suite; `node extension-kind-gate.mjs` validates the extension manifest and README locally before publishing.
 
@@ -19,5 +19,5 @@ Register external [Model Context Protocol](https://modelcontextprotocol.io) serv
 - ✓ Lists registered external MCP servers with scope, private-URL, and disabled badges
 - ✓ Adds a server by label and public URL, with an optional connection-service-stored API key
 - ✓ Removes a registered server from the per-row delete action
-- ✓ Admin-scoped: admins manage global/org/team rows; users manage only their own personal rows
+- ✓ Admin-scoped: admins manage the global row(s) and see every user's personal rows; users manage only their own personal rows
 - ✓ Host-bound by inversion of control — the registry, actions, and key store stay host-side

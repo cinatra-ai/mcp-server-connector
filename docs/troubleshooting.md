@@ -37,25 +37,26 @@ work.
 - **Cause:** The server is disabled, its URL is private, or it is out of the
   agent's scope.
 - **Fix:** Check the server's badges. Enable it if disabled, make its URL public
-  if private, and confirm its scope covers the agent's user, organization, or
-  team.
+  if private, and confirm its scope covers the agent (global, or user-scoped to
+  that agent's owner).
 - **Diagnostics:** A server with no private-URL and no disabled badge, in the
   right scope, should inject its tools.
 - **Escalation:** [Contact support](https://docs.cinatra.ai/resources/support/)
   if an enabled, public, in-scope server still injects no tools.
 
-## Cannot create a global, organization, or team server
+## Cannot create a global server
 
 - **Symptoms:** The scope selector only offers **Personal**, or a global write is
   rejected.
-- **Cause:** Registering a shared server requires platform admin; the actor is not
-  an admin.
-- **Fix:** Ask a platform admin to register the shared server, or register a
+- **Cause:** Registering a global server requires platform admin; the actor is
+  not an admin.
+- **Fix:** Ask a platform admin to register the global server, or register a
   personal server instead.
-- **Diagnostics:** An admin sees the global, organization, and team scope options;
-  a non-admin sees only Personal.
+- **Diagnostics:** An admin sees the Global and Personal scope options; a
+  non-admin sees only Personal. (Organization and Team scopes are not offered —
+  the host does not support them.)
 - **Escalation:** [Contact support](https://docs.cinatra.ai/resources/support/)
-  if an admin still cannot create a shared server.
+  if an admin still cannot create a global server.
 
 ## A deleted server still appears
 

@@ -34,11 +34,12 @@ accepted but flagged and never injected, because LLM providers cannot reach it.
 
 ## Required permissions
 
-- **In Cinatra:** the connector is `admin` visibility. Registering a global,
-  organization, or team server requires platform admin, because such a server is
-  injected into every in-scope agent's toolbox with no per-call approval — a
-  platform-wide trust mutation. Any authenticated user may register a personal
-  server bound to their own user id.
+- **In Cinatra:** the connector is `admin` visibility. Registering a global
+  server requires platform admin, because such a server is injected into every
+  agent's toolbox with no per-call approval — a platform-wide trust mutation.
+  Any authenticated user may register a personal server bound to their own
+  user id. (Organization and Team scopes are not offered — the host does not
+  support them.)
 - **Host ports:** the connector requests the `capabilities` host port and runs
   under the standard connector inversion-of-control contract — it cannot reach
   host facilities it has not been granted.
@@ -55,6 +56,9 @@ accepted but flagged and never injected, because LLM providers cannot reach it.
 - **Authorization is enforced host-side.** The host re-checks admin authority on
   every global write and binds a personal server to the actor's own user id, so a
   non-admin cannot overwrite or re-scope a shared row.
+- **Visibility is filtered per viewer.** The Registered servers list shows every
+  row to an admin; a non-admin sees only their own personal rows (never the
+  global row or another user's personal row).
 
 ## Failure modes
 
