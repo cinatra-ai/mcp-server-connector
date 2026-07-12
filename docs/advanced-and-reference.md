@@ -45,10 +45,12 @@ layers when it injects a server's tools into an LLM call.
 
 - **Global** servers are injected for every user and agent and require platform
   admin to create.
-- **Organization** and **team** servers are scoped to that group and also require
-  admin.
 - **Personal** servers are visible only to the user who registered them and are
   bound to that user's id.
+- Organization and team scopes are not offered — the host storage model has no
+  org/team column, so it cannot scope a server to either safely today.
+- The **Registered servers** list is filtered per viewer: an admin sees every
+  row; a non-admin sees only their own personal rows.
 
 ## Source and support
 

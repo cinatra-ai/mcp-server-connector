@@ -24,8 +24,9 @@ explains what that means day to day — and what it does not.
   tools injected into Cinatra's MCP toolbox, so agents within its scope can call
   them.
 - **Scope decides who sees it.** A global server is visible to every user and
-  agent; an organization or team server is scoped to that group; a personal
-  server is visible only to the user who registered it.
+  agent; a personal server is visible only to the user who registered it.
+  (Organization and team scopes are not offered — the host does not support
+  them.)
 
 ## Managing the registry
 
@@ -42,8 +43,9 @@ explains what that means day to day — and what it does not.
 - **Private URLs are not injected.** A server whose URL is private (localhost or a
   private IP) is flagged and its tools are never sent to the LLM, because LLM
   providers cannot reach it.
-- **Non-admins cannot manage shared servers.** A non-admin sees and removes only
-  their own personal rows.
+- **Non-admins cannot see or manage shared servers.** The Registered servers
+  list itself is filtered per viewer — a non-admin sees and removes only their
+  own personal rows, never the global row or another user's personal row.
 
 ## How access stays safe
 

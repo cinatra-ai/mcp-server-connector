@@ -78,10 +78,10 @@ function buildHostBoundDeps(ctx: ExtensionHostContext): McpServerConnectorHostDe
 
 /** A registry row projected to a JSON-safe shape the declarative `record-list`
  *  renderer consumes (cinatra.configSchema): scope / private-URL / disabled /
- *  api-key-configured badges as data. PURE PROJECTION — no actor evaluation, no
- *  visibility gating: the host action endpoint already authorized the actor
- *  ("use") and the host listServers facet returns only the rows that actor may
- *  see. */
+ *  api-key-configured badges as data. The `listServers` handler filters rows
+ *  to the resolved viewer BEFORE this projection runs — the host's
+ *  `listServers` facet itself returns EVERY row unfiltered, so visibility
+ *  gating has to happen here (cinatra-ai/cinatra#1407). */
 export type McpServerListRow = {
   id: string;
   label: string;
@@ -109,10 +109,15 @@ export function register(ctx: ExtensionHostContext): void {
   // registered named actions BY ID; the host dispatches them through the single
   // endpoint `/api/extensions/{installId}/actions/{actionId}`, which resolves +
   // AUTHORIZES the actor host-side (`canExtensionAccess(..., "use")`) BEFORE
-  // calling the handler. The handler therefore NEVER evaluates the actor and
-  // NEVER calls `resolveViewerContext` for authorization or visibility gating —
-  // admin-only/scope decisions are host-evaluated (the schema's `adminOnly`
-  // option flags + the host write handlers).
+  // calling the handler — that "use" check is whether the actor may call this
+  // named action AT ALL, not what rows they may SEE. `listServers` therefore
+  // DOES call `resolveViewerContext` — not for admin-only create/delete
+  // authorization (still host-evaluated: the schema's `adminOnly` option flags
+  // + the host write handlers), but to filter the returned rows to what the
+  // viewer may see (cinatra-ai/cinatra#1407 comment 4950796614: the host
+  // `listServers` facet returns EVERY row unfiltered; this handler is the only
+  // place that can apply per-viewer visibility, since the host facet is sync
+  // and viewer resolution is async-only).
   //
   // Only the READ + PROBE actions are registered here. The WRITE actions
   // (`createServer` / `deleteServer`) and their per-operation authorization
@@ -126,13 +131,25 @@ export function register(ctx: ExtensionHostContext): void {
   //
   // Requires the "ui" host port (declared in cinatra.requestedHostPorts).
 
-  // `listServers` — the live registered-server rows for the authorized actor,
+  // `listServers` — the live registered-server rows, filtered to what the
+  // resolved viewer may SEE (not just what the host action endpoint let them
+  // "use"): admins see every row; a non-admin sees only their own user-scoped
+  // rows (never globals). The host action endpoint already authorized the
+  // actor to call this handler at all ("use" tier) — this is a VISIBILITY
+  // filter on top of that, mirroring the connector's former bundled-React
+  // fallback (`isAdmin ? all : all.filter(r => r.scope === "user" && r.userId
+  // === userId)`) and the host's own `resolveViewerContext` (cinatra-ai/
+  // mcp-server-connector#18, cinatra-ai/cinatra#1407 comment 4950796614) —
   // projected to the JSON-safe `record-list` shape (badges as data).
   ctx.ui.registerAction({
     id: "listServers",
     handler: async (): Promise<{ servers: McpServerListRow[] }> => {
+      const { isAdmin, userId } = await deps.resolveViewerContext();
       const rows = deps.listServers();
-      const servers: McpServerListRow[] = rows.map((row) => ({
+      const visible = isAdmin
+        ? rows
+        : rows.filter((row) => row.scope === "user" && row.userId === userId);
+      const servers: McpServerListRow[] = visible.map((row) => ({
         id: row.id,
         label: row.label,
         serverUrl: row.serverUrl,

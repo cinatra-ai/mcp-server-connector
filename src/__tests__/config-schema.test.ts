@@ -65,52 +65,55 @@ describe("mcp-server-connector cinatra.configSchema", () => {
         "apiKeyConfigured",
       ]),
     );
-    // The live `listServers` action (host-side, `listExternalMcpServers()`) is
-    // NOT filtered per viewer today — do not claim it is, and DO disclose the
-    // real (unfiltered) behavior (cinatra-ai/cinatra#1407). Regression pin for
-    // the mcp-server-connector#18 correction.
+    // The live `listServers` NAMED-ACTION handler (this connector's
+    // register.ts, NOT the host's raw `listExternalMcpServers()` facet) DOES
+    // filter per viewer — admins see every row, non-admins see only their own
+    // personal servers — so the description must disclose that, not claim an
+    // unfiltered list (cinatra-ai/cinatra#1407 comment 4950796614). Regression
+    // pin for the mcp-server-connector#18 correction.
     const recordListDescription = (recordList.description as string).toLowerCase();
-    expect(recordListDescription).not.toMatch(
+    expect(recordListDescription).toMatch(
       /non-admins see only|only their own personal servers/,
     );
-    expect(recordListDescription).toMatch(/every registered server/);
-    expect(recordListDescription).toMatch(/regardless of who is viewing/);
+    expect(recordListDescription).not.toMatch(/regardless of who is viewing/);
 
     // create form: text label + text serverUrl + secret apiKey + select scope.
     const textKeys = byKind("text").map((f) => f.key);
     expect(textKeys).toEqual(expect.arrayContaining(["label", "serverUrl"]));
     expect(byKind("secret").map((f) => f.key)).toContain("apiKey");
 
-    // scope select with admin-only global/org/team + always-available user.
+    // scope select: ONLY admin-only global + always-available user. The host
+    // write handler fail-closed-rejects any scope outside {global, user}
+    // (`external_mcp_servers` has no org/team column and an org row maps to
+    // org-WIDE visibility, so neither can be scoped safely today) — so the
+    // connector must not OFFER org/team at all (cinatra-ai/cinatra#1407
+    // comment 4950796614). Regression pin for the mcp-server-connector#18
+    // correction: this replaces the earlier "not yet supported" compromise,
+    // which still let an admin pick a scope guaranteed to be rejected.
     const select = byKind("select").find((f) => f.key === "scope");
     expect(select).toBeDefined();
     const options = select!.options as Array<{
       value: string;
+      label: string;
       adminOnly?: boolean;
     }>;
+    expect(options.map((o) => o.value).sort()).toEqual(["global", "user"]);
     const adminOnly = options
       .filter((o) => o.adminOnly === true)
       .map((o) => o.value);
-    expect(adminOnly).toEqual(
-      expect.arrayContaining(["global", "org", "team"]),
-    );
+    expect(adminOnly).toEqual(["global"]);
     const userOpt = options.find((o) => o.value === "user");
     expect(userOpt).toBeDefined();
     expect(userOpt!.adminOnly).not.toBe(true);
-    // The live write handler (host-side `STORABLE_SCOPES`) only persists
-    // "global"/"user" — an "org"/"team" write is rejected. The org/team
-    // options stay selectable (removing them is a capability change, out of
-    // this PR's boundary) but must disclose the limitation at the point of
-    // choice, and the field description must not claim they work
-    // (cinatra-ai/cinatra#1407). Regression pin for the
-    // mcp-server-connector#18 correction.
     for (const value of ["org", "team"]) {
-      const opt = options.find((o) => o.value === value) as { label: string } | undefined;
-      expect(opt?.label.toLowerCase(), `"${value}" option label`).toMatch(/not yet supported/);
+      expect(
+        options.find((o) => o.value === value),
+        `"${value}" must not be offered as a scope option`,
+      ).toBeUndefined();
     }
-    const scopeDescription = (select as { description?: string }).description ?? "";
-    expect(scopeDescription).not.toMatch(/can create global, org, or team/i);
-    expect(scopeDescription).toMatch(/rejected on save/i);
+    const scopeDescription = ((select as { description?: string }).description ?? "").toLowerCase();
+    expect(scopeDescription).not.toMatch(/org|team/);
+    expect(scopeDescription).toMatch(/only admins can create a global server/);
 
     // create named-action, readiness advisory, saved/deleted/error banners.
     expect(byKind("named-action").map((f) => f.actionId)).toContain(
@@ -185,10 +188,13 @@ describe("mcp-server-connector cinatra.configSchema", () => {
       expect((advisory.whenReady ?? "").length).toBeGreaterThan(0);
       expect((advisory.whenNotReady ?? "").length).toBeGreaterThan(0);
       // Neither branch may claim the API key is persisted/stored, or that
-      // Organization/Team scope is creatable, or that the list is filtered to
-      // what the viewer may manage — the live host does none of these
-      // (cinatra-ai/cinatra#1407). Ground truth: only "Global" scope is called
-      // out, and the copy explicitly says the API key does not persist yet.
+      // Organization/Team scope is creatable — the live host does neither of
+      // these (cinatra-ai/cinatra#1407). Ground truth: only "Global" scope is
+      // called out, and the copy explicitly says the API key does not persist
+      // yet. (Unlike the API-key/org-team claims, "the list is filtered to
+      // what the viewer may manage" is now TRUE — the connector's own
+      // `listServers` handler filters by viewer — so it is no longer a
+      // forbidden claim here; this Help tab just doesn't happen to make it.)
       for (const copy of [advisory.whenReady, advisory.whenNotReady]) {
         const lower = (copy ?? "").toLowerCase();
         expect(lower).not.toMatch(/stored securely|api keys are stored/);
