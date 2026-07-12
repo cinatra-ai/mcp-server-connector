@@ -6,9 +6,11 @@
 // passes the PUBLIC validation path — the SAME fail-closed `validateConfigSchema`
 // the repo's `extension-kind-gate.mjs` runs in CI (and the rules-only port of
 // the host's `parseSchemaConfig` in src/lib/extension-schema-config.ts). They
-// also pin the new DSL field-kind grammar (select / record-list / advisory /
-// banner) the host renderer is extended with in PR-4, catching a PR-3<->PR-4
-// vocabulary skew at author time.
+// also pin the DSL field-kind grammar (select / record-list / advisory /
+// banner) the host renderer is extended with in PR-4, AND the cinatra-ai/
+// mcp-server-connector#18 tab-group reorg (design spec: app-connectors §II —
+// an implicit "Setup" base tab plus a reserved "Help" tab always last),
+// catching a connector<->host vocabulary skew at author time.
 
 import { describe, expect, it } from "vitest";
 // The package.json is the manifest the host materializes; the configSchema under
@@ -19,6 +21,16 @@ import { validateConfigSchema } from "../../extension-kind-gate.mjs";
 
 const configSchema = (pkg as { cinatra?: { configSchema?: unknown } }).cinatra
   ?.configSchema;
+
+type Field = Record<string, unknown>;
+type Tab = { id: string; label: string; fields: Field[] };
+
+// The base `fields` render as the host's reserved "Setup" tab (the record-list
+// of registered servers + the add-server form); `tabs[]` are the connector's
+// declared custom tabs — here, only the reserved Help tab.
+const setupFields = (configSchema as { fields: Field[] }).fields;
+const tabs = (configSchema as { tabs?: Tab[] }).tabs ?? [];
+const helpTab = tabs.find((t) => t.id === "help");
 
 describe("mcp-server-connector cinatra.configSchema", () => {
   it('declares uiSurface:"schema-config" and requests the "ui" host port', () => {
@@ -32,9 +44,8 @@ describe("mcp-server-connector cinatra.configSchema", () => {
     expect(validateConfigSchema(configSchema)).toEqual([]);
   });
 
-  it("covers every required setup element from the issue", () => {
-    const fields = (configSchema as { fields: Array<Record<string, unknown>> })
-      .fields;
+  it("covers every required setup element from the issue (the Setup tab)", () => {
+    const fields = setupFields;
     const byKind = (k: string) => fields.filter((f) => f.kind === k);
 
     // record-list of registered servers + per-row delete + badges + empty state.
@@ -54,6 +65,16 @@ describe("mcp-server-connector cinatra.configSchema", () => {
         "apiKeyConfigured",
       ]),
     );
+    // The live `listServers` action (host-side, `listExternalMcpServers()`) is
+    // NOT filtered per viewer today — do not claim it is, and DO disclose the
+    // real (unfiltered) behavior (cinatra-ai/cinatra#1407). Regression pin for
+    // the mcp-server-connector#18 correction.
+    const recordListDescription = (recordList.description as string).toLowerCase();
+    expect(recordListDescription).not.toMatch(
+      /non-admins see only|only their own personal servers/,
+    );
+    expect(recordListDescription).toMatch(/every registered server/);
+    expect(recordListDescription).toMatch(/regardless of who is viewing/);
 
     // create form: text label + text serverUrl + secret apiKey + select scope.
     const textKeys = byKind("text").map((f) => f.key);
@@ -76,12 +97,40 @@ describe("mcp-server-connector cinatra.configSchema", () => {
     const userOpt = options.find((o) => o.value === "user");
     expect(userOpt).toBeDefined();
     expect(userOpt!.adminOnly).not.toBe(true);
+    // The live write handler (host-side `STORABLE_SCOPES`) only persists
+    // "global"/"user" — an "org"/"team" write is rejected. The org/team
+    // options stay selectable (removing them is a capability change, out of
+    // this PR's boundary) but must disclose the limitation at the point of
+    // choice, and the field description must not claim they work
+    // (cinatra-ai/cinatra#1407). Regression pin for the
+    // mcp-server-connector#18 correction.
+    for (const value of ["org", "team"]) {
+      const opt = options.find((o) => o.value === value) as { label: string } | undefined;
+      expect(opt?.label.toLowerCase(), `"${value}" option label`).toMatch(/not yet supported/);
+    }
+    const scopeDescription = (select as { description?: string }).description ?? "";
+    expect(scopeDescription).not.toMatch(/can create global, org, or team/i);
+    expect(scopeDescription).toMatch(/rejected on save/i);
 
     // create named-action, readiness advisory, saved/deleted/error banners.
     expect(byKind("named-action").map((f) => f.actionId)).toContain(
       "createServer",
     );
-    expect(byKind("advisory")[0]?.probeActionId).toBe("connectionServiceReady");
+    const setupAdvisory = byKind("advisory")[0] as {
+      probeActionId?: string;
+      whenReady?: string;
+      whenNotReady?: string;
+    };
+    expect(setupAdvisory.probeActionId).toBe("connectionServiceReady");
+    // Neither branch may claim the API key is persisted/stored — the write
+    // handler (host-side) never reads it, so entering one is currently a
+    // silent no-op (cinatra-ai/cinatra#1407). Regression pin for the
+    // mcp-server-connector#18 correction: keep the Setup tab's advisory
+    // truthful and consistent with the Help tab's own copy.
+    for (const copy of [setupAdvisory.whenReady, setupAdvisory.whenNotReady]) {
+      expect(copy).toBeTruthy();
+      expect(copy!.toLowerCase()).not.toMatch(/stored securely|api keys are stored/);
+    }
     const banner = byKind("banner")[0];
     expect(banner).toBeDefined();
     const variantNames = (
@@ -90,6 +139,123 @@ describe("mcp-server-connector cinatra.configSchema", () => {
     expect(variantNames).toEqual(
       expect.arrayContaining(["saved", "deleted", "error"]),
     );
+  });
+
+  describe("tab groups (design spec: app-connectors §II — Setup base tab, reserved Help tab LAST)", () => {
+    it("declares exactly one custom tab: the reserved Help tab", () => {
+      expect(tabs.map((t) => t.id)).toEqual(["help"]);
+      expect(helpTab?.label).toBe("Help");
+    });
+
+    it("did not move the record-list / create-form (multi-instance Setup surface) off the Setup tab", () => {
+      // This connector's actual connection model is MULTI-INSTANCE (many
+      // registered external MCP servers via a record-list), not a single
+      // connect/disconnect connection — the Help tab addition must not disturb
+      // that surface, which stays entirely on the base (Setup) tab.
+      const byKind = (list: Field[], k: string) => list.filter((f) => f.kind === k);
+      const byKey = (list: Field[], k: string) =>
+        list.find((f) => (f as { key?: string }).key === k);
+      expect(byKind(setupFields, "record-list")).toHaveLength(1);
+      for (const key of ["label", "serverUrl", "apiKey", "scope"]) {
+        expect(byKey(setupFields, key), `${key} must stay on the Setup tab`).toBeDefined();
+      }
+      expect(
+        byKind(setupFields, "named-action").map((f) => (f as { actionId: string }).actionId),
+      ).toContain("createServer");
+    });
+
+    it('Help tab is READ-ONLY (no form, no Save): exactly one advisory field, no keyed/action-writing field kinds', () => {
+      const helpFields = helpTab!.fields;
+      expect(helpFields).toHaveLength(1);
+      const advisory = helpFields[0] as {
+        kind: string;
+        tone?: string;
+        probeActionId?: string;
+        whenReady?: string;
+        whenNotReady?: string;
+      };
+      expect(advisory.kind).toBe("advisory");
+      expect(advisory.tone).toBe("info");
+      // Reuses the Setup tab's existing connection-service readiness probe — no
+      // new action registered — so `whenReady`/`whenNotReady` track the SAME
+      // readiness the Setup tab's own advisory already reads.
+      expect(advisory.probeActionId).toBe("connectionServiceReady");
+      expect(typeof advisory.whenReady).toBe("string");
+      expect(typeof advisory.whenNotReady).toBe("string");
+      expect((advisory.whenReady ?? "").length).toBeGreaterThan(0);
+      expect((advisory.whenNotReady ?? "").length).toBeGreaterThan(0);
+      // Neither branch may claim the API key is persisted/stored, or that
+      // Organization/Team scope is creatable, or that the list is filtered to
+      // what the viewer may manage — the live host does none of these
+      // (cinatra-ai/cinatra#1407). Ground truth: only "Global" scope is called
+      // out, and the copy explicitly says the API key does not persist yet.
+      for (const copy of [advisory.whenReady, advisory.whenNotReady]) {
+        const lower = (copy ?? "").toLowerCase();
+        expect(lower).not.toMatch(/stored securely|api keys are stored/);
+        expect(lower).not.toMatch(/organization,? or team|organization or team/);
+        expect(lower).toMatch(/does not (currently |yet )?persist an api key/);
+      }
+
+      // No field kind that emits an `<input>`/action button (text, secret,
+      // select, boolean, number, free-list, named-action, status-probe,
+      // nango-connect, repeatable-list, record-list, dynamic-select-options) —
+      // "no form, no Save" per the design spec.
+      const writeCapableKinds = new Set([
+        "text", "secret", "select", "boolean", "number", "free-list",
+        "named-action", "status-probe", "nango-connect", "repeatable-list",
+        "record-list", "dynamic-select-options",
+      ]);
+      for (const f of helpFields) {
+        expect(writeCapableKinds.has(f.kind as string), `${JSON.stringify(f.kind)} is not read-only`).toBe(false);
+      }
+    });
+
+    it("every field key stays unique across the Setup tab AND every custom tab (one flat submit namespace)", () => {
+      const allKeyed = [...setupFields, ...(helpTab?.fields ?? [])]
+        .map((f) => (f as { key?: string }).key)
+        .filter((k): k is string => typeof k === "string");
+      expect(new Set(allKeyed).size).toBe(allKeyed.length);
+    });
+  });
+
+  describe("tabs vocabulary — FAIL-CLOSED (mirrors the host parser's tab rules)", () => {
+    const baseField = { kind: "secret", key: "apiKey", label: "API key" };
+    const wrapTabs = (tabsRaw: unknown) => ({ fields: [baseField], tabs: tabsRaw });
+
+    it("rejects a non-array tabs root", () => {
+      expect(validateConfigSchema(wrapTabs({})).length).toBeGreaterThan(0);
+    });
+
+    it("rejects an unknown key on a tab (no executable/HTML carrier)", () => {
+      expect(
+        validateConfigSchema(
+          wrapTabs([{ id: "x", label: "X", fields: [{ kind: "text", key: "k", label: "L" }], onClick: "alert(1)" }]),
+        ).length,
+      ).toBeGreaterThan(0);
+    });
+
+    it("rejects a duplicate tab id", () => {
+      expect(
+        validateConfigSchema(
+          wrapTabs([
+            { id: "dup", label: "One", fields: [{ kind: "text", key: "k1", label: "L" }] },
+            { id: "dup", label: "Two", fields: [{ kind: "text", key: "k2", label: "L" }] },
+          ]),
+        ).length,
+      ).toBeGreaterThan(0);
+    });
+
+    it("rejects a field key duplicated across the base fields and a tab", () => {
+      expect(
+        validateConfigSchema(wrapTabs([{ id: "t", label: "T", fields: [{ kind: "text", key: "apiKey", label: "Dup" }] }])).length,
+      ).toBeGreaterThan(0);
+    });
+
+    it("rejects an invalid tab id, a missing label, and an empty fields array", () => {
+      expect(validateConfigSchema(wrapTabs([{ id: "1bad", label: "X", fields: [{ kind: "text", key: "k", label: "L" }] }])).length).toBeGreaterThan(0);
+      expect(validateConfigSchema(wrapTabs([{ id: "t", fields: [{ kind: "text", key: "k", label: "L" }] }])).length).toBeGreaterThan(0);
+      expect(validateConfigSchema(wrapTabs([{ id: "t", label: "T", fields: [] }])).length).toBeGreaterThan(0);
+    });
   });
 
   describe("validateConfigSchema is fail-closed on each new kind", () => {

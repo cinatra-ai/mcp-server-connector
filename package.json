@@ -75,8 +75,8 @@
           "label": "API key storage",
           "tone": "info",
           "probeActionId": "connectionServiceReady",
-          "whenReady": "API keys are stored securely via the connection service.",
-          "whenNotReady": "Configure the connection service to enable API key storage."
+          "whenReady": "The connection service is configured. Add server does not yet persist an API key — register only servers that need no authentication.",
+          "whenNotReady": "The connection service is not configured. Add server does not yet persist an API key — register only servers that need no authentication."
         },
         {
           "kind": "record-list",
@@ -92,7 +92,7 @@
             { "key": "disabled", "label": "Disabled", "variant": "secondary" },
             { "key": "apiKeyConfigured", "label": "API key configured", "variant": "muted" }
           ],
-          "description": "Admins see every server; non-admins see only their own personal servers. Deleting a server is host-authorized."
+          "description": "This connector's setup page currently shows every registered server across every scope and owner, regardless of who is viewing. Deleting a server is host-authorized."
         },
         {
           "kind": "text",
@@ -120,11 +120,11 @@
           "key": "scope",
           "label": "Scope",
           "defaultValue": "user",
-          "description": "Only admins can create global, org, or team-scoped servers.",
+          "description": "Only admins can create a global server. Organization and Team are not yet supported by the host and are rejected on save.",
           "options": [
             { "value": "global", "label": "Global (all users, all agents)", "adminOnly": true },
-            { "value": "org", "label": "Organization", "adminOnly": true },
-            { "value": "team", "label": "Team", "adminOnly": true },
+            { "value": "org", "label": "Organization (not yet supported)", "adminOnly": true },
+            { "value": "team", "label": "Team (not yet supported)", "adminOnly": true },
             { "value": "user", "label": "Personal (only me)" }
           ]
         },
@@ -132,6 +132,23 @@
           "kind": "named-action",
           "label": "Add server",
           "actionId": "createServer"
+        }
+      ],
+      "tabs": [
+        {
+          "id": "help",
+          "label": "Help",
+          "fields": [
+            {
+              "kind": "advisory",
+              "label": "MCP Servers setup",
+              "tone": "info",
+              "probeActionId": "connectionServiceReady",
+              "whenReady": "The connection service is configured. To register a server: on the Setup tab, enter a Label and a public Server URL (LLM providers cannot reach localhost or private IPs — a private URL is flagged and never injected), choose a Scope, then click Add server. Registering a Global server (visible to every user and agent) requires platform admin; any authenticated user can register a Personal server. Note: Add server does not currently persist an API key, so register only servers that need no authentication. The Registered servers list on the Setup tab shows scope, private-URL, disabled, and API-key-configured badges, with a per-row delete action.",
+              "whenNotReady": "The connection service is not configured. To register a server: on the Setup tab, enter a Label and a public Server URL (LLM providers cannot reach localhost or private IPs — a private URL is flagged and never injected), choose a Scope, then click Add server. Registering a Global server (visible to every user and agent) requires platform admin; any authenticated user can register a Personal server. Note: Add server does not currently persist an API key, so register only servers that need no authentication. The Registered servers list on the Setup tab shows scope, private-URL, disabled, and API-key-configured badges, with a per-row delete action.",
+              "description": "Read-only setup guidance — nothing on this tab is saved."
+            }
+          ]
         }
       ]
     }
