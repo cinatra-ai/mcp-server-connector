@@ -8,7 +8,7 @@ Register external [Model Context Protocol](https://modelcontextprotocol.io) serv
 
 **Development:** `pnpm test` runs the Vitest suite; `node extension-kind-gate.mjs` validates the extension manifest and README locally before publishing.
 
-**Documentation:** the full integration hub lives at [docs.cinatra.ai/integrations/mcp-server](https://docs.cinatra.ai/integrations/mcp-server/) — overview, quick start, settings & permissions, and troubleshooting. The source pages are in this repo under `docs/` and republish on each release tag.
+**Documentation:** the full integration hub lives at [docs.cinatra.ai/integrations/mcp-server](https://docs.cinatra.ai/integrations/mcp-server/) — overview, quick start, settings & permissions, and troubleshooting. The same pages are available in this repo under [`docs/`](docs/).
 
 ## Works with
 
