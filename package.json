@@ -47,6 +47,7 @@
       "name": "Cinatra"
     },
     "displayName": "MCP Servers",
+    "logo": "./cinatra/logo.svg",
     "visibility": "admin",
     "slug": "mcp-server",
     "dependencies": [],
