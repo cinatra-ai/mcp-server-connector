@@ -28,6 +28,7 @@ import {
 } from "./deps";
 
 const PACKAGE_NAME = "@cinatra-ai/mcp-server-connector";
+const ARTIFACT_MATERIALIZE_TOOL = "artifact_materialize";
 
 // Local STRUCTURAL shape of the per-concern host service this connector adapts
 // into its deps slot — the external-MCP registry read/list surface, the
