@@ -11,6 +11,7 @@
     "cinatra"],
   "main": "./src/index.ts",
   "exports": {
+    "./setup-page": "./src/setup-page.tsx",
     ".": "./src/index.ts",
     "./register": "./src/register.ts",
     "./deps": "./src/deps.ts"
@@ -25,9 +26,14 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@cinatra-ai/sdk-extensions": "*"
+    "react": "^19.2.3",
+    "@cinatra-ai/sdk-extensions": "*",
+    "@cinatra-ai/sdk-ui": "*"
   },
   "peerDependenciesMeta": {
+    "@cinatra-ai/sdk-ui": {
+      "optional": true
+    },
     "@cinatra-ai/sdk-extensions": {
       "optional": true
     }
